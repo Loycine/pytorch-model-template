@@ -6,7 +6,7 @@ class ArgParser(object):
         parser = argparse.ArgumentParser()
 
         # Model related arguments
-        parser.add_argument('--id', default='',
+        parser.add_argument('--id', default='toy',
                             help="a name for identifying the model")
 
         # Data related arguments
@@ -21,6 +21,18 @@ class ArgParser(object):
         parser.add_argument('--num_vis', default=40, type=int,
                             help='number of images to evalutate')
 
+        # Misc arguments
+        parser.add_argument('--seed', default=1234, type=int,
+                            help='manual seed')
+        parser.add_argument('--ckpt', default='./ckpt',
+                            help='folder to output checkpoints')
+        parser.add_argument('--disp_iter', type=int, default=20,
+                            help='frequency to display')
+        parser.add_argument('--eval_epoch', type=int, default=1,
+                            help='frequency to evaluate')
+
+        self.parser = parser
+
     def add_train_arguments(self):
         parser = self.parser
 
@@ -32,6 +44,21 @@ class ArgParser(object):
                             default='data/val.csv')
         parser.add_argument('--dup_trainset', default=100, type=int,
                             help='duplicate so that one epoch has more iters')
+
+        # optimization related arguments
+        parser.add_argument('--num_epoch', default=100, type=int,
+                            help='epochs to train for')
+        parser.add_argument('--lr_toy', default=1e-3, type=float, help='LR')
+        
+        parser.add_argument('--lr_steps',
+                            nargs='+', type=int, default=[40, 60],
+                            help='steps to drop LR in epochs')
+        parser.add_argument('--beta1', default=0.9, type=float,
+                            help='momentum for sgd, beta1 for adam')
+        parser.add_argument('--weight_decay', default=1e-4, type=float,
+                            help='weights regularizer')
+
+        self.parser = parser
 
     def print_arguments(self, args):
         print("Input arguments:")

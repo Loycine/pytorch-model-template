@@ -6,7 +6,8 @@ import random
 from .models import NetBuilder
 from .models import NetWrapper
 from .dataset import ToyDataset
-
+from .utils import AverageMeter
+from .utils import plot_loss_metrics
 
 def build_model(args):
     # Net Builder
@@ -96,20 +97,96 @@ def main(args):
     print('Training Done!')
 
 
-def train():
-    pass
+def train(netWrapper, loader, optimizer, history, epoch, args):
+    torch.set_grad_enabled(True)
+    # switch to train mode
+    netWrapper.train()
+
+    # main loop
+    torch.cuda.synchronize()
+    for i, batch_data in enumerate(loader):
+        # measure data time
+        torch.cuda.synchronize()
+
+        # forward pass
+        netWrapper.zero_grad()
+        err, _ = netWrapper.forward(batch_data, args)
+        err = err.mean()
+
+        # backward
+        err.backward()
+        optimizer.step()
+
+        # measure total time
+        torch.cuda.synchronize()
+
+        # display and update history
+        if i % args.disp_iter == 0:
+            print('Epoch: [{}][{}/{}], '
+                  'lr_toy: {}, '
+                  'loss: {:.4f}'
+                  .format(epoch, i, args.epoch_iters,
+                          args.lr_toy,
+                          err.item()))
+            fractional_epoch = epoch - 1 + 1. * i / args.epoch_iters
+            history['train']['epoch'].append(fractional_epoch)
+            history['train']['err'].append(err.item())
 
 
-def evaluate():
-    pass
+def evaluate(netWrapper, loader, history, epoch, args):
+    print('Evaluating at {} epochs...'.format(epoch))
+    torch.set_grad_enabled(False)
+
+    # switch to eval mode
+    netWrapper.eval()
+
+    # initialize meters
+    loss_meter = AverageMeter()
+
+    for i, batch_data in enumerate(loader):
+        # forward pass
+        err, outputs = netWrapper.forward(batch_data, args)
+        err = err.mean()
+
+        loss_meter.update(err.item())
+        print('[Eval] iter {}, loss: {:.4f}'.format(i, err.item()))
 
 
-def checkpoint():
-    pass
+    print('[Eval Summary] Epoch: {}, Loss: {:.4f}.'
+          .format(epoch, loss_meter.average())
+
+    history['val']['epoch'].append(epoch)
+    history['val']['err'].append(loss_meter.average())
 
 
-def adjust_learning_rate():
-    pass
+    # Plot figure
+    if epoch > 0:
+        print('Plotting figures...')
+        plot_loss_metrics(args.ckpt, history)
+
+
+def checkpoint(nets, history, epoch, args):
+    print('Saving checkpoints at {} epochs.'.format(epoch))
+    (net_toy) = nets
+    suffix_latest = 'latest.pth'
+    suffix_best = 'best.pth'
+
+    torch.save(history,
+               '{}/history_{}'.format(args.ckpt, suffix_latest))
+    torch.save(net_toy.state_dict(),
+               '{}/toy_{}'.format(args.ckpt, suffix_latest))
+
+    cur_err = history['val']['err'][-1]
+    if cur_err < args.best_err:
+        args.best_err = cur_err
+        torch.save(net_toy.state_dict(),
+                   '{}/toy_{}'.format(args.ckpt, suffix_best))
+
+
+def adjust_learning_rate(optimizer, args):
+    args.lr_toy *= 0.1
+    for param_group in optimizer.param_groups:
+        param_group['lr'] *= 0.1
 
 
 if __name__ == '__main__':
